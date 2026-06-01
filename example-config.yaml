@@ -1,0 +1,43 @@
+# Example configuration file for tech-stack-checker
+# Use with: npx tsx src/cli.ts check-config -c example-config.yaml
+
+# The GitHub repository to analyze (org/repo format)
+repository: "vercel/next.js"
+
+# List of allowed technologies
+# The tool will check detected technologies against this list
+# You can use broad categories or specific technology names
+allowedTechnologies:
+  # Languages
+  - TypeScript
+  - JavaScript
+  - Rust
+  
+  # Frameworks
+  - React
+  - Next.js
+  
+  # Testing
+  - Jest
+  - Playwright
+  - Vitest
+  
+  # Build tools
+  - Turbopack
+  - Webpack
+  - SWC
+  
+  # Package managers
+  - pnpm
+  - npm
+  
+  # Linting/Formatting
+  - ESLint
+  - Prettier
+  
+  # CI/CD
+  - GitHub Actions
+  
+  # Other tools
+  - Docker
+  - Node.js
