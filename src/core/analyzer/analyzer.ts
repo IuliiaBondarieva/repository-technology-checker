@@ -23,11 +23,10 @@ export interface AnalyzeInput {
 export async function analyze(input: AnalyzeInput): Promise<AnalysisReport> {
   const detected = runDetectors(input.files, input.githubLanguageBytes);
 
-  const { results, notes } = await checkCompliance(
-    detected,
-    input.allowedTechnologies,
-    { useAI: input.useAI },
-  );
+  const { results, notes, aiInvoked, aiMatchCount, impliedMatchCount } =
+    await checkCompliance(detected, input.allowedTechnologies, {
+      useAI: input.useAI,
+    });
 
   return buildReport({
     repository: input.repository,
@@ -35,6 +34,9 @@ export async function analyze(input: AnalyzeInput): Promise<AnalysisReport> {
     filesAnalyzed: input.files.map((f) => f.path),
     notes,
     useAI: input.useAI ?? false,
+    aiInvoked,
+    aiMatchCount,
+    impliedMatchCount,
   });
 }
 
@@ -44,6 +46,9 @@ function buildReport(args: {
   filesAnalyzed: string[];
   notes: string[];
   useAI: boolean;
+  aiInvoked: boolean;
+  aiMatchCount: number;
+  impliedMatchCount: number;
 }): AnalysisReport {
   const allowed = args.results.filter((r) => r.isAllowed);
   const notAllowed = args.results.filter((r) => !r.isAllowed);
@@ -51,9 +56,18 @@ function buildReport(args: {
     (r) => r.technology.confidence === "low",
   );
 
-  // Surface low-confidence detections as uncertainties for the user.
+  const aiInfoNotes = args.notes.filter((n) =>
+    /^AI (was enabled|tie-breaker invoked)/.test(n),
+  );
+  const impliedInfoNotes = args.notes.filter((n) =>
+    /implied companions/.test(n),
+  );
+  const warningNotes = args.notes.filter(
+    (n) => !aiInfoNotes.includes(n) && !impliedInfoNotes.includes(n),
+  );
+
   const uncertainties: string[] = [
-    ...args.notes,
+    ...warningNotes,
     ...uncertain.map(
       (r) =>
         `Low confidence: ${r.technology.name} detected from ${r.technology.source}` +
@@ -61,14 +75,19 @@ function buildReport(args: {
     ),
   ];
 
-  // Honest assumptions of the deterministic pipeline.
   const assumptions = [
     "Analysis is limited to manifest/configuration files and GitHub's language byte stats.",
     "Library-level dependencies are intentionally not enumerated; only languages, frameworks, and tools.",
-    args.useAI
-      ? "An LLM was used to match unresolved detected items against broad allowed-list entries."
-      : "Broad allowed-list entries (e.g. 'JavaScript ecosystem') were not evaluated; pass --use-ai to enable that.",
-  ];
+    ...impliedInfoNotes,
+    ...(args.useAI ? aiInfoNotes : []),
+    args.aiInvoked
+      ? `An LLM matched ${args.aiMatchCount} technology(ies) to broad allowed-list entries (see "(AI)" in matches).`
+      : !args.useAI
+        ? "Broad allowed-list entries (e.g. 'JavaScript ecosystem') were not evaluated; pass --use-ai to enable that."
+        : aiInfoNotes.length === 0
+          ? "AI was requested (--use-ai) but no LLM call was made."
+          : "",
+  ].filter(Boolean);
 
   return {
     repository: args.repository,
@@ -86,5 +105,7 @@ function buildReport(args: {
     filesAnalyzed: args.filesAnalyzed,
     errors: [],
     usedAI: args.useAI,
+    aiInvoked: args.aiInvoked,
+    aiMatchCount: args.aiMatchCount,
   };
 }

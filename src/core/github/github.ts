@@ -40,19 +40,81 @@ const INDICATOR_FILES = new Set<string>([
 
 const FILE_FETCH_LIMIT = 40;
 
+function githubApiErrorMessage(
+  error: unknown,
+  owner: string,
+  repo: string,
+  hasToken: boolean,
+): string {
+  const status =
+    error && typeof error === "object" && "status" in error
+      ? (error as { status: number }).status
+      : undefined;
+
+  if (status === 404) {
+    const slug = `${owner}/${repo}`;
+    if (!hasToken) {
+      return (
+        `Repository "${slug}" was not found on GitHub (or is private). ` +
+        `Check owner/repo spelling, push the repo and create at least one commit on the default branch, ` +
+        `or set GITHUB_TOKEN in .env.local for private repositories.`
+      );
+    }
+    return (
+      `Repository "${slug}" was not found or your token cannot access it. ` +
+      `Verify the slug, that the repo has commits on its default branch, and that the token has repo scope.`
+    );
+  }
+
+  if (status === 403) {
+    return (
+      `GitHub API rate limit or permission denied for "${owner}/${repo}". ` +
+      `Set GITHUB_TOKEN in .env.local to raise limits and access private repos.`
+    );
+  }
+
+  return error instanceof Error ? error.message : "Unknown GitHub API error";
+}
+
 export class GitHubClient {
   private octokit: Octokit;
+  private hasToken: boolean;
 
   constructor(token?: string) {
+    this.hasToken = Boolean(token);
     this.octokit = new Octokit({ auth: token });
+  }
+
+  /** Resolves the default branch tip to a tree SHA for recursive listing. */
+  private async getDefaultBranchTreeSha(
+    owner: string,
+    repo: string,
+  ): Promise<string> {
+    const { data: repoInfo } = await this.octokit.rest.repos.get({
+      owner,
+      repo,
+    });
+    const { data: branch } = await this.octokit.rest.repos.getBranch({
+      owner,
+      repo,
+      branch: repoInfo.default_branch,
+    });
+    return branch.commit.commit.tree.sha;
   }
 
   // flat list of every file/folder in the repo
   async getRepoFiles(owner: string, repo: string): Promise<RepoFile[]> {
+    let tree_sha: string;
+    try {
+      tree_sha = await this.getDefaultBranchTreeSha(owner, repo);
+    } catch (error) {
+      throw new Error(githubApiErrorMessage(error, owner, repo, this.hasToken));
+    }
+
     const { data: tree } = await this.octokit.rest.git.getTree({
       owner,
       repo,
-      tree_sha: "HEAD",
+      tree_sha,
       recursive: "true",
     });
 

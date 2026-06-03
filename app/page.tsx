@@ -3,20 +3,20 @@
 import Image from "next/image";
 import { Loader2, XCircle, Plus, X, Sparkles } from "lucide-react";
 
-import { Button } from "@/src/components/ui/button";
-import { Input } from "@/src/components/ui/input";
-import { Label } from "@/src/components/ui/label";
+import { Button } from "@/src/web/components/ui/Button";
+import { Input } from "@/src/web/components/ui/Input";
+import { Label } from "@/src/web/components/ui/Label";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/src/components/ui/card";
-import { Badge } from "@/src/components/ui/badge";
-import { GitHubIcon } from "@/src/components/GitHubIcon";
-import { ReportView } from "@/src/reporter/ReportView";
-import { useAnalysisForm } from "@/src/hooks/useAnalysisForm";
+} from "@/src/web/components/ui/Card";
+import { Badge } from "@/src/web/components/ui/Badge";
+import { GitHubIcon } from "@/src/web/components/GitHubIcon";
+import { ReportView } from "@/src/web/report/ReportView";
+import { useAnalysisForm } from "@/src/web/hooks/useAnalysisForm";
 
 export default function Page() {
   const {

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GitHubClient } from "@/src/github";
-import { analyze } from "@/src/analyzer/analyzer";
-import { ConfigSchema } from "@/src/types";
+import { GitHubClient } from "@/src/core/github";
+import { analyze } from "@/src/core/analyzer";
+import { ConfigSchema } from "@/src/core/types";
+
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {

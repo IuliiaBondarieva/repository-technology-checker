@@ -14,9 +14,9 @@ export interface ChatOptions {
 
 export async function chatJSON<T = unknown>(options: ChatOptions): Promise<T> {
   const baseURL =
-    options.baseURL ?? process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1";
+    options.baseURL ?? process.env.OPENAI_BASE_URL ?? "http://localhost:11434/v1";
   const apiKey = options.apiKey ?? process.env.OPENAI_API_KEY ?? "not-needed";
-  const model = options.model ?? process.env.AI_MODEL ?? "gpt-4o-mini";
+  const model = options.model ?? process.env.AI_MODEL ?? "llama3.1:8b";
 
   const response = await fetch(`${baseURL.replace(/\/+$/, "")}/chat/completions`, {
     method: "POST",

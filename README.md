@@ -1,26 +1,110 @@
 # Tech Stack Checker
 
-A small tool that analyzes a GitHub repository and reports whether it uses
-only technologies from an approved stack. Detection is **deterministic**:
-manifest files + GitHub's language byte stats are parsed directly, no LLM
-required. An optional LLM tie-breaker can be enabled for fuzzy
-allowed-list entries like *"JavaScript testing tools"*.
+A tool that analyzes a **GitHub repository** and reports whether it appears to use only technologies from an **approved stack** you provide (languages, frameworks, and tools — not every library).
 
-## What it does
+Detection is **deterministic by default**: it reads manifest/config files and GitHub language statistics. An **optional** LLM can help only when your allowed list contains broad, natural-language categories (e.g. *"JavaScript testing tools"*).
 
-Given:
-- a GitHub repository (`org/repo`)
-- a list of allowed technologies (languages / frameworks / tools)
+---
 
-it produces a report containing:
-- whether the repo is compliant
-- every detected technology, with category, confidence, and source attribution
-- which are allowed, which are not, and which allowed entry matched
-- uncertainties and assumptions
-- the exact files that were analyzed
+## What you can do
 
-Output is available as colorized CLI, JSON, or HTML. The tool ships both a
-CLI and a small Next.js web UI that wraps the same engine.
+### Inputs
+
+| You provide | Example |
+|---|---|
+| Repository | `vercel/next.js` (`owner/repo`) |
+| Allowed technologies | `TypeScript`, `React`, `Spring Boot`, `Docker`, … |
+| (Optional) GitHub token | Higher rate limits; required for private repos |
+| (Optional) AI | `--use-ai` (CLI) or checkbox (web) for broad allowed-list entries |
+
+Config via CLI flags, a YAML/JSON file (`example-config.yaml`), or the web form.
+
+### Outputs
+
+The report tells you:
+
+- **Compliant or non-compliant** (any detected technology not on the allowed list → non-compliant)
+- **Every detected technology** with category (language, framework, tool, …)
+- **Whether each detected item is allowed**, and which allowed entry it matched
+- **Detection confidence** (`●●●` high · `●●○` medium · `●○○` low) — how sure the tool is that the technology is present; **not** the same as allowed/not allowed
+- **Source** (e.g. `package.json`, `pom.xml`, GitHub `/languages` API)
+- **Uncertainties and assumptions** (e.g. low-confidence detections, skipped broad rules without AI)
+- **List of files** that were fetched and analyzed
+
+### How you can run it
+
+| Interface | Command | Best for |
+|---|---|---|
+| **Web UI** | `pnpm dev` → http://localhost:3000 | Interactive checks, sharing with non-CLI users |
+| **CLI (terminal)** | `pnpm check -r org/repo -a Tech1 Tech2 …` | Scripts, CI, local workflows |
+| **CLI (JSON)** | `-o json --output-dir ./reports` | Automation, dashboards |
+| **CLI (HTML)** | `-o html` | Static report file (same React layout as the web UI) |
+
+Exit codes (CLI): `0` = analysis finished (report printed); `1` = non-compliant **only with `--strict`** (for CI); `2` = error (GitHub API, config, etc.).
+
+### What gets detected (best-effort)
+
+The tool looks at **configuration and CI manifests**, not your application source code. Supported ecosystems include:
+
+- **JavaScript / TypeScript** — `package.json`, lockfiles, `tsconfig.json` (React, Next.js, Jest, Vite, ESLint, npm/pnpm/Yarn, Node.js, …)
+- **Python** — `pyproject.toml`, `requirements.txt`, `Pipfile`, … (Django, Flask, pytest, Ruff, Poetry, …)
+- **JVM** — `pom.xml`, Gradle/Kotlin build files (Java, Kotlin, Spring, JUnit, Gradle, Maven, …)
+- **Go, Rust, Ruby, PHP** — `go.mod`, `Cargo.toml`, `Gemfile`, `composer.json`, …
+- **Containers & CI** — `Dockerfile`, docker-compose, GitHub Actions workflows, GitLab CI, Jenkins
+- **Languages from GitHub** — byte counts from the `/languages` endpoint (medium/low confidence when no manifest backs them up)
+
+Name matching understands common aliases (`ts` → TypeScript, `nextjs` → Next.js) via a built-in table.
+
+### What works well
+
+- **Reproducible, explainable checks** — same repo + same allowed list → same result (unless you enable AI for broad categories)
+- **Implied companions** — e.g. allowing `React` also allows `Node.js`, `JavaScript`, and common package managers (shown as `matches: React (implied)`); see `src/core/analyzer/ecosystem.ts` to extend the map
+- **No API key required** for public repos in deterministic mode
+- **Fast enough for a single-repo review** — only fetches a bounded set of indicator files
+- **Honest uncertainty** — low-confidence detections are flagged; broad allowed-list entries are called out if AI is off
+
+---
+
+## Limitations (what this tool does **not** do)
+
+Read these before relying on the tool for strict compliance gates.
+
+### Scope of analysis
+
+| Limitation | Detail |
+|---|---|
+| **GitHub only** | You cannot point the tool at a local folder; it needs `owner/repo` on GitHub. |
+| **Default branch only** | Analysis uses `HEAD` on the default branch, not every branch or tag. |
+| **Manifest-level, not library-level** | It checks languages, frameworks, and major tools — not whether `lodash` or `requests` is on an allow-list. |
+| **No version rules** | You cannot require "TypeScript ≥ 5" or "Spring Boot 3.x only"; version strings in manifests are not validated. |
+| **No transitive dependency audit** | Lockfiles are used as signals (e.g. package manager), not fully parsed for every transitive package. |
+| **No source-code scanning** | Technologies used only in `.java`/`.py` files without appearing in build configs may be **missed**. |
+| **Shallow ecosystem coverage** | Elixir, Swift, .NET, Terraform, Helm, monorepo workspaces, etc. are partial or unsupported; exotic stacks need new detector code. |
+| **File fetch cap** | At most **40** indicator files are downloaded per run; very large monorepos may omit nested manifests without a warning in `uncertainties` yet. |
+
+### Allowed-list matching
+
+| Limitation | Detail |
+|---|---|
+| **Exact names only (default)** | Entries like `TypeScript` or `Jest` match via aliases. Phrases like *"JavaScript testing tools"* or *"Spring ecosystem"* **do not match anything** unless you enable AI. |
+| **AI is optional and narrow** | With `--use-ai`, only **unmatched** detected items vs **broad** allowed entries are sent to an LLM. Matches are tagged `(AI)` in the report. Results can vary by model; AI does not drive detection itself. |
+| **Conservative compliance** | If a technology is detected and not clearly allowed, it counts as **not allowed** — manual review is expected for borderline cases. |
+
+### GitHub & environment
+
+| Limitation | Detail |
+|---|---|
+| **Rate limits** | Without `GITHUB_TOKEN`, unauthenticated API limits apply (60 requests/hour). Use a token for regular use. |
+| **Private repositories** | Need a `GITHUB_TOKEN` with access to the repo. |
+| **Network required** | The tool calls the GitHub API (and optionally an LLM endpoint). |
+
+### Report semantics
+
+- **"Compliant" means "nothing detected looked disallowed"** — not a legal guarantee; detection can miss or mis-infer technologies.
+- **Detection confidence ≠ permission** — a row can be green (allowed) with `●○○` (low confidence): allowed by your list, but weak evidence it is actually used.
+- **False positives** are possible (e.g. devDependency or CI-only tool counted like production stack).
+
+---
 
 ## How to run
 
@@ -29,43 +113,14 @@ CLI and a small Next.js web UI that wraps the same engine.
 - Node.js 20.12+
 - pnpm (or npm / yarn / bun)
 
-That's it. No API keys needed for the default (deterministic) mode.
+No API keys for the default (deterministic) mode on public repositories.
 
 ### Install
 
 ```bash
 pnpm install
-cp .env.example .env.local   # only needed for the optional GITHUB_TOKEN or AI
+cp .env.example .env.local   # optional: GITHUB_TOKEN and/or AI settings
 ```
-
-### CLI
-
-```bash
-# Inline allowed list
-pnpm check -r "expressjs/express" -a JavaScript "Node.js" Mocha ESLint Prettier
-
-# YAML/JSON config file
-pnpm check-config -c example-config.yaml
-
-# Save JSON + HTML reports
-pnpm check -r "vercel/next.js" -a TypeScript JavaScript React "Next.js" \
-  -o all --output-dir ./reports
-
-# Opt-in: use an LLM to evaluate broad allowed-list entries
-pnpm check -r "owner/repo" -a TypeScript "JavaScript testing tools" --use-ai
-```
-
-| Flag | Description |
-|---|---|
-| `-r, --repo <slug>` | GitHub repo `org/repo` (required) |
-| `-a, --allowed <techs...>` | Allowed technologies (required) |
-| `-c, --config <file>` | YAML or JSON config file (for `check-config`) |
-| `-o, --output <format>` | `cli`, `json`, `html`, or `all` (default `cli`) |
-| `--output-dir <dir>` | Output directory (default `./reports`) |
-| `-t, --token <token>` | GitHub token (or set `GITHUB_TOKEN`) |
-| `--use-ai` | Use an LLM to match broad allowed-list entries |
-
-Exit codes: `0` compliant, `1` non-compliant, `2` error.
 
 ### Web UI
 
@@ -74,33 +129,54 @@ pnpm dev
 # open http://localhost:3000
 ```
 
-Same engine as the CLI; the UI just calls `POST /api/analyze` with the
-repo, allowed list, and an optional `useAI` flag.
+Enter `owner/repo`, add allowed technologies, optionally enable AI for broad list entries, then analyze.
+
+### CLI
+
+```bash
+# Inline allowed list
+pnpm check -r "expressjs/express" -a JavaScript "Node.js" Mocha ESLint Prettier npm "GitHub Actions"
+
+# YAML/JSON config file
+pnpm check-config -c example-config.yaml
+
+# Save JSON + HTML reports
+pnpm check -r "vercel/next.js" -a TypeScript JavaScript React "Next.js" \
+  -o all --output-dir ./reports
+
+# Broad allowed-list entries (requires AI credentials in .env.local)
+pnpm check -r "owner/repo" -a TypeScript "JavaScript testing tools" --use-ai
+```
+
+| Flag | Description |
+|---|---|
+| `-r, --repo <slug>` | GitHub repository `org/repo` (required for `check`) |
+| `-a, --allowed <techs...>` | Allowed technologies (required for `check`) |
+| `-c, --config <file>` | YAML or JSON config (for `check-config`) |
+| `-o, --output <format>` | `cli`, `json`, `html`, or `all` (default: `cli`) |
+| `--output-dir <dir>` | Output directory (default: `./reports`) |
+| `-t, --token <token>` | GitHub token (or `GITHUB_TOKEN` env var) |
+| `--use-ai` | LLM tie-breaker for broad allowed-list entries only |
+| `--strict` | Exit `1` when non-compliant (use in CI; default exits `0` after printing the report) |
 
 ### Optional: AI tie-breaker
 
-If you pass `--use-ai`, the tool sends a tiny payload to any
-OpenAI-compatible endpoint (OpenAI cloud, Ollama, Groq, Together,
-OpenRouter, …). It is used *only* to decide whether an unmatched detected
-technology belongs to a broad allowed-list entry such as `"JavaScript
-ecosystem"`. Deterministic detection runs the same way regardless.
-
-Configure via `.env.local` (see `.env.example` for full examples):
+Configure in `.env.local` (see `.env.example`):
 
 ```bash
-# Default: OpenAI cloud
+# OpenAI cloud
 OPENAI_API_KEY=sk-...
 AI_MODEL=gpt-4o-mini
 
-# Or: free local Ollama
+# Or local Ollama (free)
 OPENAI_BASE_URL=http://localhost:11434/v1
 OPENAI_API_KEY=ollama
 AI_MODEL=qwen2.5:7b
 ```
 
-## Inputs
+---
 
-### Config file (YAML)
+## Config file example
 
 ```yaml
 repository: "vercel/next.js"
@@ -109,135 +185,46 @@ allowedTechnologies:
   - React
   - Next.js
   - Jest
-useAI: false   # optional, default false
+useAI: false
 ```
 
-JSON is also accepted. See `example-config.yaml` for a fuller example.
+See `example-config.yaml` for a longer example.
 
-### Allowed-list semantics
+---
 
-- **Exact / aliased names** (e.g. `TypeScript`, `ts`, `typescript`, `Next.js`,
-  `nextjs`) are matched deterministically via a built-in alias table.
-- **Broad categories** (e.g. `"JavaScript testing tools"`,
-  `"Spring ecosystem"`) are *not* evaluated without `--use-ai`. They will
-  show up under "Uncertainties" so it's obvious nothing matched against them.
-
-## Overall approach
+## How it works (short)
 
 ```
-┌────────────────┐   ┌───────────────────┐   ┌────────────────────────┐   ┌──────────┐
-│ GitHub API     │──▶│ Detectors (per    │──▶│ Compliance matcher     │──▶│ Reporter │
-│ files + langs  │   │ ecosystem parser) │   │ (alias + optional AI)  │   │ CLI/JSON/│
-└────────────────┘   └───────────────────┘   └────────────────────────┘   │ HTML/UI  │
-                                                                          └──────────┘
+GitHub API (manifests + /languages)
+        ↓
+Deterministic detectors (per ecosystem)
+        ↓
+Compliance match (alias table + optional AI for broad entries)
+        ↓
+Report (web / terminal / JSON / HTML)
 ```
 
-1. **GitHub client** (`src/github.ts`) fetches a fixed allow-list of manifest
-   files (`package.json`, `pyproject.toml`, `pom.xml`, `go.mod`, …) plus
-   GitHub's `/languages` byte counts (Linguist-powered).
-2. **Detectors** (`src/detectors.ts`) — one small function per ecosystem.
-   Each parses the relevant manifests deterministically and emits
-   `DetectedTechnology[]` with category, confidence, and the file/line that
-   produced it. New ecosystems are added by writing another ~30-line function.
-3. **Aliases** (`src/aliases.ts`) canonicalises names so `ts`, `typescript`,
-   and `TypeScript` collapse to the same key.
-4. **Compliance matcher** (`src/compliance.ts`) does a deterministic
-   set match. If `useAI` is on **and** the allowed list contains broad
-   entries, it sends just the unresolved names + broad entries to an LLM
-   for a tie-break decision; those matches are tagged `"(AI)"` in the
-   report so reviewers can spot them.
-5. **AI client** (`src/ai.ts`) is a ~40-line `fetch` wrapper around the
-   OpenAI-compatible chat-completions API. No vendor SDK.
-6. **Reporter** (`src/reporter.ts`) renders CLI (chalk), JSON, or HTML.
+1. **Fetch** indicator files from the repo tree (and language byte stats from GitHub).
+2. **Detect** technologies from parsed manifests (high confidence) and language stats (medium/low).
+3. **Match** each detected name to your allowed list (exact → implied companions → optional AI for broad entries).
+4. **Report** compliance, sources, confidence, and notes.
 
-## Important design decisions
-
-1. **Deterministic by default, AI is opt-in.** A compliance tool should
-   be reproducible and explainable. Manifest files are structured; a 200-line
-   parser handles them perfectly without the cost, latency, or
-   non-determinism of an LLM. AI is reserved for the one place it
-   genuinely helps — matching against natural-language allowed-list
-   entries — and even there it's behind `--use-ai`.
-2. **GitHub Linguist for languages.** Instead of guessing from file
-   extensions, we use GitHub's own `/repos/{owner}/{repo}/languages`
-   endpoint (byte-accurate, free, cached server-side).
-3. **Manifest files, not source code.** Configuration files are the
-   reliable, low-volume signal for what a project *uses*. Scanning every
-   `.kt` or `.py` file would be slower, hit rate limits, and rarely add
-   anything that wasn't already in `build.gradle.kts` or `pyproject.toml`.
-4. **Canonical alias map over a fuzzy matcher.** A small hand-curated
-   map (`src/aliases.ts`) covers the realistic variations
-   (`Next.js`/`nextjs`/`next`, `pytest`/`PyTest`, …) and stays auditable.
-5. **Confidence tags surface uncertainty.** Direct dependencies →
-   `high`; inferred from byte counts only → `medium` or `low`. Low-confidence
-   detections are also echoed in the "Uncertainties" section.
-6. **No vendor lock-in.** Removed `ai`, `@ai-sdk/openai`, `@vercel/analytics`
-   and the many shadcn components we weren't actually using. The AI client
-   is plain `fetch` and works with any OpenAI-compatible endpoint.
-7. **Single engine, two front-ends.** Both the CLI and the Next.js
-   `/api/analyze` route call the same `analyze()` function — no business
-   logic duplicated in the web layer.
-
-## Assumptions
-
-- Public repositories work without a token; private repos need a
-  `GITHUB_TOKEN`.
-- We analyze the default branch (`HEAD`).
-- We focus on the language/framework/tool level — individual npm/PyPI
-  libraries (Lodash, requests, …) are intentionally not enumerated.
-- The first ~40 indicator files in the tree are fetched (enough for
-  realistic monorepos, cheap enough to avoid rate limits).
-
-## Limitations and known gaps
-
-- **Per-ecosystem coverage is best-effort.** The detectors cover the most
-  common ecosystems (JS/TS, Python, JVM, Go, Rust, Ruby, PHP, Docker,
-  GitHub Actions) but are deliberately shallow — a new ecosystem needs a
-  new tiny detector function.
-- **Monorepos**: nested `package.json` files inside the fetched window
-  are parsed, but workspace-aware behaviour is not implemented.
-- **No version pinning checks.** "TypeScript 5.x only" can't be
-  expressed today.
-- **Lockfiles aren't parsed for transitive deps.** We trust the
-  declared dependencies in the top-level manifest.
-- **AI tie-breaker is best-effort.** Different LLMs will produce
-  slightly different matches for broad categories; AI-matched entries
-  are explicitly tagged so reviewers can audit them.
-
-## What I would improve next
-
-1. **Version checks** — express constraints like "TypeScript >= 5" in
-   the allowed list and validate against `engines` / dependency versions.
-2. **Monorepo / workspace awareness** — recurse into `pnpm-workspace.yaml`,
-   `lerna.json`, Gradle multi-module setups.
-3. **Caching** — memoize GitHub responses by SHA to make repeat runs free.
-4. **Per-ecosystem unit tests** — each detector should have a small
-   fixture-based test suite; the parsers are pure functions, so this is
-   cheap to add.
-5. **Custom alias / category rules from the config file** — let users
-   teach the tool that `"@company/internal-test-utils"` means JUnit.
-6. **CI integration** — a GitHub Action that fails the build on
-   non-compliance.
+---
 
 ## Project layout
 
+See `src/README.md`. Summary:
+
 ```
-src/
-  aliases.ts       canonical-name table
-  detectors.ts     one small function per ecosystem
-  compliance.ts    deterministic matcher + optional AI tie-breaker
-  ai.ts            ~40-line OpenAI-compatible fetch client
-  analyzer.ts      orchestrator (compose detectors + compliance)
-  github.ts        Octokit wrapper (files + language bytes)
-  reporter.ts      CLI / JSON / HTML renderers
-  cli.ts           Commander entry point
-  types.ts         shared types & zod config schema
-app/
-  page.tsx         minimal Next.js UI
-  api/analyze/     POST endpoint that calls analyze()
+src/core/     Shared engine (types, github, analyzer)
+src/web/      Next.js UI (hooks, components, ReportView)
+src/cli/      CLI (terminal, JSON, HTML export)
+app/          Next.js routes
 ```
 
-## Example output
+---
+
+## Example CLI output
 
 ```
 ============================================================
@@ -251,21 +238,21 @@ Summary:
   Total technologies detected: 5
   Allowed: 4
   Not allowed: 1
-  Low confidence: 0
+  Low detection confidence: 0
 
 ✓ Allowed Technologies:
-  • ESLint [tool] ●●● (matches: ESLint)
-    └─ dependency: eslint
+  • ESLint [tool] ●●● high (matches: ESLint)
     └─ Source: package.json
-  • JavaScript [language] ●●● (matches: JavaScript)
-  • Mocha [tool] ●●● (matches: Mocha)
-  • Node.js [runtime] ●●● (matches: Node.js)
-    └─ engines.node = >= 18
+  • JavaScript [language] ●●● high (matches: JavaScript)
+  • Mocha [tool] ●●● high (matches: Mocha)
+  • Node.js [runtime] ●●● high (matches: Node.js)
 
 ✗ Not Allowed Technologies:
-  • GitHub Actions [tool] ●●●
+  • GitHub Actions [tool] ●●● high
     └─ 4 workflow file(s)
 ```
+
+---
 
 ## License
 

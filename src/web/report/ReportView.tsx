@@ -1,9 +1,4 @@
-// Shared React view of an AnalysisReport.
-//
-// Used by both the Next.js web UI (rendered on the client) and the standalone
-// HTML report produced by the CLI (rendered on the server via
-// react-dom/server's renderToStaticMarkup). Keeping a single component means
-// the two views always agree.
+// Web UI report component. Also used by the CLI HTML exporter (src/cli/HtmlReporter.tsx).
 
 import {
   AlertCircle,
@@ -11,14 +6,14 @@ import {
   XCircle,
   type LucideIcon,
 } from "lucide-react";
-import { Badge } from "@/src/components/ui/badge";
+import { Badge } from "@/src/web/components/ui/Badge";
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-} from "@/src/components/ui/card";
-import type { AnalysisReport, ComplianceResult } from "../types";
+} from "@/src/web/components/ui/Card";
+import type { AnalysisReport, ComplianceResult } from "@/src/core/types";
 import {
   CONFIDENCE_COLOR,
   CONFIDENCE_DESCRIPTION,
@@ -55,6 +50,15 @@ export function ReportView({ report }: { report: AnalysisReport }) {
           </div>
         </CardContent>
       </Card>
+
+      <p className="text-sm text-muted-foreground">
+        <span className="font-medium text-foreground">AI: </span>
+        {report.aiInvoked
+          ? `LLM invoked — ${report.aiMatchCount} match(es); look for “(AI)” in allowed rows.`
+          : report.usedAI
+            ? "Enabled but not invoked — see Notes below."
+            : "Off (deterministic matching only)."}
+      </p>
 
       <div className="grid grid-cols-4 gap-4">
         <Stat label="Total Detected" value={report.summary.totalDetected} />

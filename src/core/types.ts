@@ -50,7 +50,12 @@ export interface AnalysisReport {
   assumptions: string[];
   filesAnalyzed: string[];
   errors: string[];
+  /** User requested AI (`--use-ai` / checkbox). */
   usedAI: boolean;
+  /** An LLM API call was made for broad-category matching. */
+  aiInvoked: boolean;
+  /** Technologies allowed via AI broad-category match (see `matchedAllowedTech` ending with `(AI)`). */
+  aiMatchCount: number;
 }
 
 export interface RepoFile {

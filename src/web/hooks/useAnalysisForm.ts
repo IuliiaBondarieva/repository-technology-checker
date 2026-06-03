@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { AnalysisReport } from "@/src/types";
+import type { AnalysisReport } from "@/src/core/types";
 
 const DEFAULT_ALLOWED_TECH = [
   "TypeScript",

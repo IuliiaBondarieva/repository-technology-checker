@@ -3,7 +3,8 @@
 // Strategy:
 //   1. Canonicalize both sides via the alias table.
 //   2. Exact match by canonical name (deterministic, explainable).
-//   3. For anything still unmatched, if the allowed list contains broad/fuzzy
+//   3. Implied companions (e.g. React → Node.js) when a related framework is allowed.
+//   4. For anything still unmatched, if the allowed list contains broad/fuzzy
 //      entries ("JavaScript testing tools") AND `useAI` is enabled, ask an
 //      LLM to map detected items onto broad entries. This is the *only* place
 //      AI is used, and it's opt-in.
@@ -13,6 +14,7 @@
 
 import { canonicalize, isBroadCategory } from "./aliases";
 import { chatJSON } from "./ai";
+import { buildImpliedAllowMap } from "./ecosystem";
 import type { ComplianceResult, DetectedTechnology } from "../types";
 
 export interface CheckOptions {
@@ -22,6 +24,9 @@ export interface CheckOptions {
 export interface CheckResult {
   results: ComplianceResult[];
   notes: string[];
+  aiInvoked: boolean;
+  aiMatchCount: number;
+  impliedMatchCount: number;
 }
 
 export async function checkCompliance(
@@ -42,20 +47,56 @@ export async function checkCompliance(
     }
   }
 
+  const impliedAllow = buildImpliedAllowMap(allowedExact);
+  let impliedMatchCount = 0;
+
   const results: ComplianceResult[] = detected.map((t) => {
-    const original = allowedExact.get(t.name);
+    const exact = allowedExact.get(t.name);
+    if (exact) {
+      return {
+        technology: t,
+        isAllowed: true,
+        matchedAllowedTech: exact,
+      };
+    }
+
+    const impliedFrom = impliedAllow.get(t.name);
+    if (impliedFrom) {
+      impliedMatchCount++;
+      return {
+        technology: t,
+        isAllowed: true,
+        matchedAllowedTech: `${impliedFrom} (implied)`,
+      };
+    }
+
     return {
       technology: t,
-      isAllowed: original !== undefined,
-      matchedAllowedTech: original,
+      isAllowed: false,
+      matchedAllowedTech: undefined,
     };
   });
 
   // Optional AI tie-breaker for broad-category entries.
   const unmatched = results.filter((r) => !r.isAllowed);
+  let aiInvoked = false;
+  let aiMatchCount = 0;
+
+  if (options.useAI && allowedBroad.length === 0) {
+    notes.push(
+      "AI was enabled but not used: no broad allowed-list entries " +
+        "(e.g. \"Python web frameworks\"). Add a multi-word or category-style entry, or use exact names.",
+    );
+  } else if (options.useAI && unmatched.length === 0) {
+    notes.push(
+      "AI was enabled but not used: every detected technology already matched the allowed list deterministically.",
+    );
+  }
+
   if (unmatched.length > 0 && allowedBroad.length > 0) {
     if (options.useAI) {
       try {
+        aiInvoked = true;
         const aiMatches = await broadMatchWithAI(
           unmatched.map((r) => r.technology),
           allowedBroad,
@@ -65,9 +106,15 @@ export async function checkCompliance(
           if (match) {
             r.isAllowed = true;
             r.matchedAllowedTech = `${match} (AI)`;
+            aiMatchCount++;
           }
         }
+        notes.push(
+          `AI tie-breaker invoked: ${aiMatchCount} of ${unmatched.length} unmatched ` +
+            `technologies matched broad allowed-list entries.`,
+        );
       } catch (err) {
+        aiInvoked = false;
         notes.push(
           `AI tie-breaker failed: ${err instanceof Error ? err.message : "unknown error"}`,
         );
@@ -81,7 +128,13 @@ export async function checkCompliance(
     }
   }
 
-  return { results, notes };
+  if (impliedMatchCount > 0) {
+    notes.push(
+      `${impliedMatchCount} technology(ies) allowed as implied companions of entries on your list (see "(implied)" in matches).`,
+    );
+  }
+
+  return { results, notes, aiInvoked, aiMatchCount, impliedMatchCount };
 }
 
 async function broadMatchWithAI(
