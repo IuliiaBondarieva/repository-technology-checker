@@ -1,0 +1,31 @@
+---
+description: Next.js app and web UI conventions
+globs: "{app/**/*,src/web/**/*}"
+alwaysApply: false
+---
+
+# Web UI (`app/`, `src/web/`)
+
+## Structure
+
+- Form state: `src/web/hooks/useAnalysisForm.ts` — repo slug, allowed list, `useAI`, API call to `/api/analyze`
+- Report: `src/web/report/ReportView.tsx` — shared with CLI HTML export
+- Confidence UI: `src/web/report/confidence.ts` — dots/labels; **confidence ≠ compliance** (row color = allowed/not allowed)
+
+## Components
+
+- UI primitives live under `src/web/components/ui/` (PascalCase filenames: `Button.tsx`, `Card.tsx`, …)
+- Use `cn()` from `@/lib/utils` for class merging
+
+## API route (`app/api/analyze/route.ts`)
+
+- Validate body with `ConfigSchema` from `src/core/types`
+- Pass `GITHUB_TOKEN` from env to `GitHubClient`
+- Return full `AnalysisReport` JSON; errors as `{ error: string }` with 500
+
+## Do not
+
+- Duplicate detection or compliance logic in the client
+- Add heavy dependencies for one-off UI; keep the bundle small
+
+When changing report shape, update `ReportView` and `terminal-reporter.ts` together for parity.

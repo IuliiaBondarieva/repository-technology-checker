@@ -58,7 +58,7 @@ Name matching understands common aliases (`ts` → TypeScript, `nextjs` → Next
 ### What works well
 
 - **Reproducible, explainable checks** — same repo + same allowed list → same result (unless you enable AI for broad categories)
-- **Implied companions** — e.g. allowing `React` also allows `Node.js`, `JavaScript`, and common package managers (shown as `matches: React (implied)`); see `src/core/analyzer/ecosystem.ts` to extend the map
+- **Implied companions** — e.g. allowing `React` also allows `Node.js`, …; allowing `"Spring Boot"` also allows `Maven`, `Gradle`, `Java`, `Spring`, … (shown as `matches: Spring Boot (implied)`). Quote multi-word entries on the CLI: `-a "Spring Boot"`. See `src/core/analyzer/ecosystem.ts`.
 - **No API key required** for public repos in deterministic mode
 - **Fast enough for a single-repo review** — only fetches a bounded set of indicator files
 - **Honest uncertainty** — low-confidence detections are flagged; broad allowed-list entries are called out if AI is off
@@ -212,6 +212,8 @@ Report (web / terminal / JSON / HTML)
 ---
 
 ## Project layout
+
+**AI coding context:** `AGENTS.md`, `.cursor/rules/`, `.cursor/skills/`, `.cursor/commands/` (type `/` in Cursor for slash commands like `/check-repo`, `/smoke-test`, `/extend-analyzer`).
 
 See `src/README.md`. Summary:
 

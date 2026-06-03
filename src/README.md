@@ -22,3 +22,5 @@ src/
 
 - **Web**: `app/` → imports from `@/src/core` + `@/src/web`
 - **CLI**: `pnpm check` → imports from `@/src/core` + `@/src/cli` (HTML export optionally uses `@/src/web/report`)
+
+Agent docs: `AGENTS.md`; rules `.cursor/rules/`; skills `.cursor/skills/`; slash commands `.cursor/commands/` (e.g. `/smoke-test`).

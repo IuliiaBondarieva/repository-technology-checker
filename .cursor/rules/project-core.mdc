@@ -1,0 +1,35 @@
+---
+description: Core architecture and constraints for Tech Stack Checker
+alwaysApply: true
+---
+
+# Tech Stack Checker — core rules
+
+## Layer boundaries
+
+- **`src/core/`** — shared analysis engine; no React, no Commander, no Next.js imports
+- **`src/web/`** — UI only; may import `@/src/core`
+- **`src/cli/`** — CLI only; may import `@/src/core` and `@/src/web/report` for HTML export
+- **`app/`** — Next.js routes; thin handlers that call `src/core`
+
+## Compliance matching order
+
+1. Exact canonical match (`aliases.ts`)
+2. Implied companions (`ecosystem.ts`) — suffix `(implied)` in reports
+3. Optional LLM for broad allowed entries only when `useAI` is true — suffix `(AI)`
+
+Do not use AI for detection itself; only for unmatched vs broad allowed-list entries.
+
+## CLI exit codes
+
+- `0` — analysis completed (report printed)
+- `1` — non-compliant **only** when `--strict` is passed
+- `2` — GitHub/config/runtime errors
+
+## Changes checklist
+
+- New manifest file type → update `INDICATOR_FILES` / tree filters in `github.ts` **and** a detector in `detectors.ts`
+- New alias → `aliases.ts` only (keep canonical names consistent with detector output)
+- User-facing behavior → update `README.md` if limits or flags change
+
+Keep diffs focused; avoid unrelated refactors.

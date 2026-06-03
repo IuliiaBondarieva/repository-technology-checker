@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "tsc --noEmit",
     "check": "tsx --env-file-if-exists=.env.local src/cli/cli.ts check",
     "check-config": "tsx --env-file-if-exists=.env.local src/cli/cli.ts check-config"
   },

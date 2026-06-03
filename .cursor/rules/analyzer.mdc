@@ -1,0 +1,34 @@
+---
+description: Analyzer, detectors, compliance, and GitHub fetch conventions
+globs: src/core/**/*
+alwaysApply: false
+---
+
+# Analyzer module (`src/core/`)
+
+## Detectors (`detectors.ts`)
+
+- Append new ecosystems to the `DETECTORS` array; use `tech()` so names go through `canonicalize()`
+- Prefer **high** confidence only with direct manifest evidence; use **medium**/**low** when inferring
+- Deduplication is by canonical name in `runDetectors()` — multiple sources get merged sources string
+
+## GitHub fetch (`github/github.ts`)
+
+- Resolves default branch tree SHA (not `HEAD` string)
+- Fetches basename matches from `INDICATOR_FILES` plus `.github/workflows/*.yml`, k8s yaml paths
+- `FILE_FETCH_LIMIT = 40` — if adding many paths, consider priority or truncation notes in report
+
+## Compliance (`compliance.ts`)
+
+- `isBroadCategory()` gates AI — markers like `tools`, `frameworks`, `ecosystem`, or long multi-word phrases
+- Return `aiInvoked` / `aiMatchCount` / `impliedMatchCount` accurately; informational AI notes belong in assumptions, not uncertainties
+
+## `ai.ts`
+
+- OpenAI-compatible `chat/completions` with JSON response; no extra SDKs
+- Env: `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `AI_MODEL`
+
+## Types (`types.ts`)
+
+- `AnalysisReport` is the contract for web API, CLI JSON, and `ReportView`
+- Extend report fields only when all consumers (terminal, JSON, React) can surface them meaningfully

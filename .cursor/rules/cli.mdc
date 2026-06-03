@@ -1,0 +1,25 @@
+---
+description: CLI entry point and reporters
+globs: src/cli/**/*
+alwaysApply: false
+---
+
+# CLI (`src/cli/`)
+
+## Entry (`cli.ts`)
+
+- Commands: `check` (inline args), `check-config` (YAML/JSON)
+- Loads `.env.local` via `tsx --env-file-if-exists=.env.local` (see `package.json` scripts)
+- Flags: `-r`, `-a`, `-o` (cli|json|html|all), `--output-dir`, `-t`, `--use-ai`, `--strict`
+
+## Reporters
+
+- `terminal-reporter.ts` — chalk output; show `AI mode:` line from `usedAI` / `aiInvoked`
+- `json-reporter.ts` — full `AnalysisReport` JSON
+- `HtmlReporter.tsx` — `renderToStaticMarkup(ReportView)`; keep styles inline/minimal for standalone HTML files
+
+## Exit behavior
+
+After successful analysis, default exit `0` even when non-compliant; `--strict` exits `1` for CI.
+
+Do not import Next.js server code into CLI; only `src/core` + optional `src/web/report`.

@@ -48,8 +48,15 @@ export const ECOSYSTEM_COMPANIONS: Record<Canonical, Canonical[]> = {
   Django: ["Python", "pip", "Poetry"],
   Flask: ["Python", "pip"],
 
-  // JVM
-  "Spring Boot": ["Java", "Kotlin", "Maven", "Gradle", "JUnit"],
+  // JVM — Spring Boot on the allowed list implies typical build stack + core Spring
+  "Spring Boot": [
+    "Spring",
+    "Java",
+    "Kotlin",
+    "Maven",
+    "Gradle",
+    "JUnit",
+  ],
   Spring: ["Java", "Kotlin", "Maven", "Gradle"],
   Micronaut: ["Java", "Kotlin", "Gradle", "Maven"],
   Quarkus: ["Java", "Kotlin", "Gradle", "Maven"],
